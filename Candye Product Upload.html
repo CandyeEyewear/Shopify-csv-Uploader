@@ -1,0 +1,1012 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Shopify CSV Builder — Preset for Your Workbook</title>
+  <style>
+    :root {
+      --bg: #0f172a; /* slate-900 */
+      --card: #111827; /* gray-900 */
+      --muted: #94a3b8; /* slate-400 */
+      --fg: #e5e7eb; /* gray-200 */
+      --accent: #22d3ee; /* cyan-400 */
+      --accent-2: #34d399; /* emerald-400 */
+      --warn: #f59e0b; /* amber-500 */
+      --err: #ef4444; /* red-500 */
+      --radius: 14px;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji"; background: var(--bg); color: var(--fg); }
+    header { padding: 24px 20px; display:flex; gap:18px; align-items:center; justify-content:space-between; border-bottom: 1px solid rgba(148,163,184,.15); }
+    h1 { font-size: clamp(18px, 2.6vw, 24px); margin: 0; letter-spacing: .3px; }
+    .wrap { max-width: 1200px; margin: 0 auto; padding: 20px; }
+    .card { background: var(--card); border: 1px solid rgba(148,163,184,.15); border-radius: var(--radius); padding: 18px; box-shadow: 0 10px 30px rgba(0,0,0,.25); }
+    .grid { display:grid; gap:16px; }
+    .grid.cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .grid.cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .grid.cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    @media (max-width: 960px){ .grid.cols-2, .grid.cols-3, .grid.cols-4 { grid-template-columns: 1fr; } }
+    label { font-size: 12px; color: var(--muted); display:block; margin-bottom: 6px; }
+    select, input[type="text"], input[type="number"], input[type="url"], textarea { width: 100%; background: #0b1220; color: var(--fg); border: 1px solid rgba(148,163,184,.25); border-radius: 10px; padding: 10px 12px; outline: none; }
+    textarea { min-height: 100px; resize: vertical; }
+    .row { display:flex; align-items:center; gap:10px; }
+    .btn { border: 1px solid rgba(148,163,184,.25); color: var(--fg); background: linear-gradient(180deg, #0b1220, #0c1323); padding: 10px 14px; border-radius: 12px; cursor: pointer; font-weight: 600; }
+    .btn.primary { background: linear-gradient(180deg, #0b1220, #102e2a); border-color: rgba(52, 211, 153, .5); }
+    .btn.accent { background: linear-gradient(180deg, #0b1220, #11252a); border-color: rgba(34, 211, 238, .5); }
+    .btn.link { background: transparent; border-color: rgba(148,163,184,.25); }
+    .btn:disabled { opacity: .6; cursor: not-allowed; }
+    .muted { color: var(--muted); font-size: 13px; }
+    .pill { display:inline-flex; align-items:center; gap:8px; padding: 6px 10px; border-radius: 999px; border:1px dashed rgba(148,163,184,.3); background:#0b1220; font-size:12px; color:var(--muted) }
+    .drop { border: 2px dashed rgba(148,163,184,.25); border-radius: var(--radius); padding: 22px; display:flex; align-items:center; justify-content:center; text-align:center; background:#0b1220; min-height: 120px; }
+    table { width:100%; border-collapse: collapse; }
+    th, td { border-bottom:1px solid rgba(148,163,184,.15); padding: 8px 10px; font-size: 13px; vertical-align: top; }
+    th { text-align:left; color: var(--muted); position: sticky; top: 0; background: var(--card); }
+    .list { display:flex; flex-wrap: wrap; gap:8px; }
+    .chip { display:inline-flex; align-items:center; gap:8px; padding:6px 10px; border-radius:999px; border:1px solid rgba(148,163,184,.25); background:#0b1220; font-size:12px; }
+    .chip button { background:transparent; border:0; color:var(--muted); cursor:pointer; }
+    .success { color: var(--accent-2); }
+    .warn { color: var(--warn); }
+    .err { color: var(--err); }
+  </style>
+  <!-- CSV & Excel parsers -->
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+</head>
+<body>
+  <header>
+    <div class="row" style="gap:12px">
+      <div class="pill">Shopify CSV Builder</div>
+      <div class="muted">Supplier → Processed → Shopify, all in your browser</div>
+    </div>
+    <div class="row" style="gap:8px">
+      <a class="btn link" href="http://localhost:3000" target="_blank" rel="noopener noreferrer">Add Images</a>
+      <button id="btnDownload" class="btn primary" disabled>Download Shopify CSV</button>
+      <button id="btnReset" class="btn">Reset</button>
+    </div>
+  </header>
+
+  <div class="wrap grid cols-2">
+    <!-- Left column: File and Mapping -->
+    <section class="card">
+      <h2 style="margin-top:0">1) Load your supplier file</h2>
+      <div id="drop" class="drop">
+        <div>
+          <div class="muted">Drop a CSV/XLSX file here, or</div>
+          <div style="margin-top:10px"><input type="file" id="file" accept=".csv,.xlsx,.xls,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" /></div>
+        </div>
+      </div>
+      <div id="fileInfo" class="muted" style="margin-top:10px"></div>
+
+      <hr style="border:0;border-top:1px solid rgba(148,163,184,.15); margin: 18px 0" />
+
+      <h2>2) Map supplier columns</h2>
+      <p class="muted">Pick which columns in your supplier file correspond to key product fields. You can leave non‑applicable ones blank.</p>
+
+      <div id="mapping" class="grid cols-2"></div>
+
+      <div style="margin-top:10px; display:flex; gap:8px; flex-wrap:wrap">
+        <button id="btnInfer" class="btn">Auto‑infer common columns</button>
+        <button id="btnPreset" class="btn" disabled>Preset: Master List (this workbook)</button>
+      </div>
+
+      <hr style="border:0;border-top:1px solid rgba(148,163,184,.15); margin: 18px 0" />
+
+      <h2>3) Transformation settings</h2>
+      <div class="grid cols-2">
+        <div>
+          <label>Default Vendor (if not mapped)</label>
+          <input type="text" id="defaultVendor" value="Candye" />
+        </div>
+        <div>
+          <label>Default Product Type (if not mapped)</label>
+          <select id="defaultTypeSel">
+            <option value="">— choose —</option>
+            <option value="Reading Glasses">Reading Glasses</option>
+            <option value="Sunglasses">Sunglasses</option>
+            <option value="Accessories">Accessories</option>
+          </select>
+        </div>
+        <div>
+          <label>SKU Prefix</label>
+          <select id="skuPrefixSel">
+            <option value="">(none)</option>
+            <option value="F">F</option>
+            <option value="G">G</option>
+          </select>
+        </div>
+
+        <div>
+          <label>Product Category</label>
+          <select id="productCategory">
+            <option value="Eyeglasses" selected>Eyeglasses</option>
+            <option value="Sunglasses">Sunglasses</option>
+          </select>
+        </div>
+        <div>
+          <label>Status</label>
+          <select id="productStatus">
+            <option value="active" selected>active</option>
+            <option value="draft">draft</option>
+          </select>
+        </div>
+        <div>
+          <label>Variant Quantity (manual override)</label>
+          <input type="number" id="variantQty" min="0" step="1" value="0" />
+          <div class="muted">If &gt; 0, overrides any mapped quantity.</div>
+        </div>
+
+        <div>
+          <label>Price adjustment (%)</label>
+          <input type="number" id="priceAdj" step="0.01" value="0" />
+          <div class="muted">Final Variant Price = Cost × (1 + %/100)</div>
+        </div>
+
+        <div>
+          <label>Additional Tags (comma‑separated)</label>
+          <input type="text" id="extraTags" placeholder="e.g., Polarized, Spring Hinge" />
+          <div class="muted">Appends to tags built from Gender + Feature (semicolons are auto‑converted).</div>
+        </div>
+      </div>
+
+      <!-- Try-On (kept) -->
+      <div class="card" style="margin-top:16px; background:#0b1220">
+        <div class="row" style="justify-content:space-between; align-items:center">
+          <h3 style="margin:0">Try‑On Overlay Metafield (optional)</h3>
+          <label class="switch"><input type="checkbox" id="mfEnable" /> Enable</label>
+        </div>
+        <div id="mfBlock" class="grid cols-3" style="margin-top:10px; display:none">
+          <div>
+            <label>Namespace</label>
+            <input id="mfNs" type="text" value="custom" />
+          </div>
+          <div>
+            <label>Key</label>
+            <input id="mfKey" type="text" value="try_on_overlay_image" />
+          </div>
+          <div>
+            <label>Base URL (where overlay images live)</label>
+            <input id="mfBase" type="url" placeholder="https://cdn.example.com/overlays/" />
+          </div>
+          <div>
+            <label>Filename Template</label>
+            <input id="mfTpl" type="text" value="${sku}-tryon" />
+          </div>
+          <div>
+            <label>File Extension</label>
+            <input id="mfExt" type="text" value=".png" />
+          </div>
+          <div>
+            <label>Attach metafield to</label>
+            <select id="mfLevel">
+              <option value="variant">Variant</option>
+              <option value="product">Product</option>
+            </select>
+          </div>
+        </div>
+        <div class="muted" style="margin-top:8px">Example outcome: <span class="kbd" id="mfExample"></span></div>
+      </div>
+
+      <!-- Fixed Frame Spec Metafields (mapping + defaults) -->
+      <div class="card" style="margin-top:16px; background:#0b1220">
+        <h3 style="margin:0 0 8px 0">Frame Spec Metafields (map or set defaults)</h3>
+        <div class="grid cols-3">
+          <div>
+            <label>Frame Width mm (map column)</label>
+            <select id="map_frameWidthMM"></select>
+            <label class="muted" style="margin-top:6px">Default (if not mapped)</label>
+            <input type="number" id="def_frameWidthMM" min="0" step="1" />
+          </div>
+          <div>
+            <label>Nose Bridge (map column)</label>
+            <select id="map_noseBridge"></select>
+            <label class="muted" style="margin-top:6px">Default</label>
+            <input type="number" id="def_noseBridge" min="0" step="1" />
+          </div>
+          <div>
+            <label>Temple Length (map column)</label>
+            <select id="map_templeLength"></select>
+            <label class="muted" style="margin-top:6px">Default</label>
+            <input type="number" id="def_templeLength" min="0" step="1" />
+          </div>
+          <div>
+            <label>Lens Height (map column)</label>
+            <select id="map_lensHeight"></select>
+            <label class="muted" style="margin-top:6px">Default</label>
+            <input type="number" id="def_lensHeight" min="0" step="1" />
+          </div>
+          <div>
+            <label>Lens Width (map column)</label>
+            <select id="map_lensWidth"></select>
+            <label class="muted" style="margin-top:6px">Default</label>
+            <input type="number" id="def_lensWidth" min="0" step="1" />
+          </div>
+          <div>
+            <label>Clip‑ons (map column)</label>
+            <select id="map_clipOns"></select>
+            <label class="muted" style="margin-top:6px">Default</label>
+            <input type="text" id="def_clipOns" placeholder="Yes / No / Included" />
+          </div>
+          <div>
+            <label>Spring Hinge (map column)</label>
+            <select id="map_springHinge"></select>
+            <label class="muted" style="margin-top:6px">Default</label>
+            <input type="text" id="def_springHinge" placeholder="Yes / No" />
+          </div>
+        </div>
+        <div class="muted" style="margin-top:8px">These will populate Shopify metafields on each <b>product</b> (first row per product).</div>
+      </div>
+
+      <!-- Custom Metafields (builder) -->
+      <div class="card" style="margin-top:16px; background:#0b1220">
+        <h3 style="margin:0 0 8px 0">Custom Metafields (optional)</h3>
+        <div class="grid cols-4" style="align-items:end">
+          <div>
+            <label>Namespace</label>
+            <input type="text" id="cmfNs" placeholder="custom" />
+          </div>
+          <div>
+            <label>Key</label>
+            <input type="text" id="cmfKey" placeholder="e.g., lens_width" />
+          </div>
+          <div>
+            <label>Type</label>
+            <select id="cmfType">
+              <option value="single_line_text_field">single_line_text_field</option>
+              <option value="url">url</option>
+              <option value="number_integer">number_integer</option>
+              <option value="number_decimal">number_decimal</option>
+              <option value="boolean">boolean</option>
+              <option value="color">color</option>
+            </select>
+          </div>
+          <div>
+            <label>Attach to</label>
+            <select id="cmfLevel">
+              <option value="variant">Variant</option>
+              <option value="product">Product</option>
+            </select>
+          </div>
+          <div style="grid-column: 1 / -1">
+            <label>Value Template (supports ${sku}, ${handle}, ${spu}, ${frameShape}, ${opt1Val}, ${opt2Val}, ${opt3Val}, ${title}, ${vendor}, ${productType}, ${productCategory}, ${price}, ${cost}, ${tags})</label>
+            <input type="text" id="cmfTpl" placeholder="e.g., https://cdn.example.com/specs/${sku}.pdf" />
+          </div>
+          <div>
+            <button id="btnAddCmf" class="btn accent">Add metafield</button>
+          </div>
+        </div>
+        <div class="muted" style="margin-top:8px">We’ll create columns like <span class="kbd">Metafield: namespace.key [type]</span> and populate values per row depending on “Attach to”.</div>
+        <div id="cmfList" class="list" style="margin-top:10px"></div>
+      </div>
+
+      <div style="margin-top:16px">
+        <button id="btnBuild" class="btn accent" disabled>Build Shopify CSV</button>
+      </div>
+    </section>
+
+    <!-- Right column: Preview -->
+    <section class="card">
+      <h2 style="margin-top:0">Preview</h2>
+      <div id="previewTip" class="muted">Load a file and click “Build Shopify CSV” to see the first 100 rows here.</div>
+      <div style="overflow:auto; max-height: 70vh" id="previewWrap"></div>
+      <div id="status" class="muted" style="margin-top:10px"></div>
+    </section>
+  </div>
+
+  <footer class="wrap">
+    Tip: If your supplier file has multiple image URL columns, map them all (Image 1…Image N). The app will generate additional image rows per product/handle as Shopify expects.
+  </footer>
+
+  <script>
+    // ---------- Utility helpers ----------
+    const slugify = (str) => (str||"")
+      .toString().normalize('NFKD').replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '');
+
+    const cleanStr = (s) => String(s ?? '').trim();
+    const toNum = (v) => {
+      if (v === null || v === undefined || v === '') return '';
+      const n = Number(String(v).replace(/[^0-9.-]/g, ''));
+      return isFinite(n) ? n : '';
+    };
+    const toDigits = (s) => String(s ?? '').replace(/\D+/g, '');
+    const toIntDigits = (s) => {
+      const d = toDigits(s);
+      if (!d) return '';
+      const n = parseInt(d, 10);
+      return Number.isFinite(n) ? n : '';
+    };
+
+    const threeFrom = (val) => {
+      const str = String(val ?? '');
+      const theMid = str.substring(2, 5); // JS is 0-indexed
+      const chosen = theMid && theMid.trim() !== '' ? theMid : str.substring(0,3);
+      return toDigits(chosen);
+    };
+
+    function extractPriceFromTierString(input){
+      const s = String(input ?? '').trim();
+      if (!s) return '';
+      const m = s.match(/(?:^|;)\s*1\s*:\s*([0-9]+(?:\.[0-9]+)?)/);
+      if (m) return Number(m[1]);
+      const pairs = s.split(';').map(p => p.trim()).map(p => {
+        const mm = p.match(/^\s*(\d+)\s*:\s*([0-9]+(?:\.[0-9]+)?)/);
+        return mm ? { key: Number(mm[1]), val: Number(mm[2]) } : null;
+      }).filter(Boolean);
+      if (pairs.length){
+        pairs.sort((a,b)=>a.key - b.key);
+        return pairs[0].val;
+      }
+      return '';
+    }
+
+    const uniq = (arr) => Array.from(new Set(arr));
+    const textToHtml = (t) => {
+      const s = String(t ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      return s.replace(/\n/g,'<br>');
+    };
+    const by = (key) => (a,b) => (a[key]||'').localeCompare(b[key]||'');
+
+    const toProper = (s)=> (s||'')
+      .toString().toLowerCase()
+      .replace(/\b([a-z])/g,m=>m.toUpperCase())
+      .replace(/\s+/g,' ')
+      .trim();
+
+    function normalizeTags(...parts){
+      const tokens = [];
+      parts.filter(Boolean).forEach(p=>{
+        String(p)
+          .replace(/;/g, ',')
+          .split(',')
+          .map(x=>x.trim())
+          .forEach(x=>{ if (x) tokens.push(x); });
+      });
+      const unique = Array.from(new Set(tokens));
+      return unique.join(', ');
+    }
+
+    function applyTemplate(tpl, scope){
+      const s = String(tpl||'');
+      return s.replace(/\$\{(\w+)\}/g, (_,k)=> {
+        const v = scope[k];
+        return (v === undefined || v === null) ? '' : String(v);
+      });
+    }
+
+    // ---------- State ----------
+    let headers = [];
+    let rows = [];
+    let customMetafields = []; // {ns,key,type,level,tpl}
+
+    const requiredMappings = [
+      { id:'sku',           label:'Supplier SKU' },
+      { id:'spu',           label:'Spu' },
+      { id:'frameShape',    label:'Frame Shape' },
+      { id:'gender',        label:'Gender' },
+      { id:'feature',       label:'Feature' },
+      { id:'title',         label:'Title / Name' },
+      { id:'desc',          label:'Description (plain)' },
+      { id:'vendor',        label:'Vendor' },
+      { id:'ptype',         label:'Product Type' },
+      { id:'glassesPrice',  label:'Glasses Price (source for Cost)' },
+      { id:'cmpPrice',      label:'Compare At Price (optional)' },
+      { id:'qty',           label:'Inventory Qty' },
+      { id:'grams',         label:'Weight (grams)' },
+      { id:'opt1Name',      label:'Option1 Name' },
+      { id:'opt1Val',       label:'Option1 Value' },
+      { id:'opt2Name',      label:'Option2 Name' },
+      { id:'opt2Val',       label:'Option2 Value' },
+      { id:'opt3Name',      label:'Option3 Name' },
+      { id:'opt3Val',       label:'Option3 Value' },
+      { id:'image1',        label:'Image URL 1' },
+      { id:'image2',        label:'Image URL 2' },
+      { id:'image3',        label:'Image URL 3' },
+      { id:'tags',          label:'Tags (extra, from source — optional)' },
+      { id:'barcode',       label:'Barcode (optional)' },
+
+      // Fixed metafield mappings (product-level)
+      { id:'frameWidthMM',  label:'(MF) Frame Width mm' },
+      { id:'noseBridge',    label:'(MF) Nose Bridge' },
+      { id:'templeLength',  label:'(MF) Temple Length' },
+      { id:'lensHeight',    label:'(MF) Lens Height' },
+      { id:'lensWidth',     label:'(MF) Lens Width' },
+      { id:'clipOns',       label:'(MF) Clip-ons (text)' },
+      { id:'springHinge',   label:'(MF) Spring Hinge (text)' }
+    ];
+
+    const mappingState = {};
+
+    // ---------- DOM refs ----------
+    const el = (id) => document.getElementById(id);
+
+    const fileInput = el('file');
+    const drop = el('drop');
+    const fileInfo = el('fileInfo');
+    const mappingWrap = el('mapping');
+    const btnInfer = el('btnInfer');
+    const btnPreset = el('btnPreset');
+    const btnBuild = el('btnBuild');
+    const btnDownload = el('btnDownload');
+    const btnReset = el('btnReset');
+    const previewWrap = el('previewWrap');
+    const previewTip = el('previewTip');
+    const statusEl = el('status');
+    const defaultVendor = el('defaultVendor');
+    const defaultTypeSel = el('defaultTypeSel');
+    const skuPrefixSel = el('skuPrefixSel');
+
+    const productCategorySel = el('productCategory');
+    const productStatusSel = el('productStatus');
+    const variantQtyEl = el('variantQty');
+    const priceAdjEl = el('priceAdj');
+    const extraTagsEl = el('extraTags');
+
+    const mfEnable = el('mfEnable');
+    the_mfBlock = el('mfBlock');
+    const mfNs = el('mfNs');
+    const mfKey = el('mfKey');
+    const mfBase = el('mfBase');
+    const mfTpl = el('mfTpl');
+    const mfExt = el('mfExt');
+    const mfLevel = el('mfLevel');
+    const mfExample = el('mfExample');
+
+    // Fixed MF mapping selects + default inputs
+    const map_frameWidthMM = el('map_frameWidthMM');
+    const map_noseBridge   = el('map_noseBridge');
+    const map_templeLength = el('map_templeLength');
+    const map_lensHeight   = el('map_lensHeight');
+    const map_lensWidth    = el('map_lensWidth');
+    const map_clipOns      = el('map_clipOns');
+    const map_springHinge  = el('map_springHinge');
+
+    const def_frameWidthMM = el('def_frameWidthMM');
+    const def_noseBridge   = el('def_noseBridge');
+    const def_templeLength = el('def_templeLength');
+    const def_lensHeight   = el('def_lensHeight');
+    const def_lensWidth    = el('def_lensWidth');
+    const def_clipOns      = el('def_clipOns');
+    const def_springHinge  = el('def_springHinge');
+
+    // Custom metafields UI
+    const cmfNs = el('cmfNs');
+    const cmfKey = el('cmfKey');
+    const cmfType = el('cmfType');
+    const cmfLevel = el('cmfLevel');
+    const cmfTpl = el('cmfTpl');
+    const btnAddCmf = el('btnAddCmf');
+    const cmfList = el('cmfList');
+
+    // ---------- File handling ----------
+    drop.addEventListener('dragover', (e) => { e.preventDefault(); drop.style.borderColor = 'var(--accent)'; });
+    drop.addEventListener('dragleave', () => { drop.style.borderColor = 'rgba(148,163,184,.25)'; });
+    drop.addEventListener('drop', (e) => {
+      e.preventDefault(); drop.style.borderColor = 'rgba(148,163,184,.25)';
+      if (e.dataTransfer.files?.[0]) handleFile(e.dataTransfer.files[0]);
+    });
+    fileInput.addEventListener('change', (e) => { if (e.target.files?.[0]) handleFile(e.target.files[0]); });
+
+    function handleFile(file){
+      const name = file.name.toLowerCase();
+      fileInfo.textContent = `Loaded: ${file.name}`;
+      if (name.endsWith('.csv')) parseCSV(file);
+      else if (name.endsWith('.xlsx') || name.endsWith('.xls')) parseXLSX(file);
+      else fileInfo.innerHTML = `<span class="err">Unsupported file type.</span>`;
+    }
+
+    function parseCSV(file){
+      Papa.parse(file, {
+        header: true,
+        skipEmptyLines: 'greedy',
+        transformHeader: (h) => String(h || '').replace(/^\uFEFF/, '').trim(),
+        complete: (res) => {
+          const rawHeaders = res.meta.fields || [];
+          const data = (res.data || []).filter(row =>
+            Object.values(row).some(v => String(v ?? '').trim() !== '')
+          );
+          if (!rawHeaders.length){ status(`<span class='err'>No header row detected in CSV.</span>`); return; }
+          headers = rawHeaders;
+          rows = data;
+          buildMappingUI();
+          btnBuild.disabled = rows.length === 0;
+          btnPreset.disabled = false;
+          status(rows.length ? `Parsed ${rows.length.toLocaleString()} rows from CSV.` : `<span class='warn'>Header detected but no data rows found.</span>`);
+        },
+        error: (err) => status(`<span class='err'>CSV parse error: ${err}</span>`)
+      });
+    }
+
+    function parseXLSX(file){
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const data = new Uint8Array(e.target.result);
+          const wb = XLSX.read(data, { type: 'array' });
+
+          let chosenName = null, json = [], hdrs = [];
+          for (const name of wb.SheetNames){
+            const ws = wb.Sheets[name];
+            const j = XLSX.utils.sheet_to_json(ws, { defval: '' });
+            if (j && j.length && Object.keys(j[0]||{}).length){ chosenName = name; json = j; hdrs = Object.keys(j[0]); break; }
+            const arr = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+            if (arr && arr.length > 1 && (arr[0]||[]).length){
+              chosenName = name;
+              const headerRow = arr[0].map(h => String(h||'').replace(/^\uFEFF/, '').trim());
+              const dataRows = arr.slice(1).filter(r => r.some(cell => String(cell||'').trim() !== ''));
+              json = dataRows.map(r => { const o={}; headerRow.forEach((h,i)=> o[h]=r[i] ?? ''); return o; });
+              hdrs = headerRow; break;
+            }
+          }
+          if (!chosenName){ status(`<span class='err'>No sheets with a usable header were found.</span>`); return; }
+          headers = hdrs;
+          rows = (json || []).filter(row => Object.values(row).some(v => String(v ?? '').trim() !== ''));
+          buildMappingUI();
+          btnBuild.disabled = rows.length === 0;
+          btnPreset.disabled = false;
+          status(rows.length ? `Parsed ${rows.length.toLocaleString()} rows from “${chosenName}”.` : `<span class='warn'>Sheet “${chosenName}” has headers but no data rows.</span>`);
+        } catch(err){
+          console.error(err);
+          status(`<span class='err'>XLSX parse error: ${err.message||err}</span>`);
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    }
+
+    // ---------- Mapping UI ----------
+    function buildMappingUI(){
+      mappingWrap.innerHTML = '';
+      requiredMappings.forEach(m => {
+        const wrap = document.createElement('div');
+        const lab = document.createElement('label');
+        lab.textContent = m.label;
+        const sel = document.createElement('select');
+        sel.innerHTML = `<option value="">— none —</option>` + headers.map(h=>`<option value="${h}">${h}</option>`).join('');
+        sel.addEventListener('change', ()=> mappingState[m.id] = sel.value);
+        wrap.append(lab, sel);
+        mappingWrap.append(wrap);
+      });
+
+      const mfSelects = [map_frameWidthMM, map_noseBridge, map_templeLength, map_lensHeight, map_lensWidth, map_clipOns, map_springHinge];
+      mfSelects.forEach(sel => {
+        sel.innerHTML = `<option value="">— none —</option>` + headers.map(h=>`<option value="${h}">${h}</option>`).join('');
+      });
+    }
+
+    btnInfer.addEventListener('click', ()=>{
+      const guess = (nameLike) => headers.find(h => h.toLowerCase().includes(nameLike));
+      const setSel = (id, val) => {
+        const idx = requiredMappings.findIndex(m=>m.id===id);
+        if (idx<0) return;
+        const sel = mappingWrap.querySelectorAll('select')[idx];
+        if (!sel) return;
+        const option = Array.from(sel.options).find(o=>o.value===val);
+        if (option) sel.value = val, mappingState[id]=val;
+      };
+      setSel('sku', guess('sku') || guess('product code') || guess('item'));
+      setSel('spu', headers.find(h => /^spu$/i.test(h)));
+      setSel('frameShape', headers.find(h => /frame\s*shape/i.test(h)));
+      setSel('gender', headers.find(h => /^gender$/i.test(h)) || guess('gender'));
+      setSel('feature', headers.find(h => /^feature$/i.test(h)) || guess('feature'));
+      setSel('title', guess('title') || guess('name') || guess('product'));
+      setSel('desc', guess('desc') || guess('description'));
+      setSel('vendor', guess('vendor') || guess('brand') || guess('manufacturer'));
+      setSel('ptype', guess('type') || guess('category'));
+      setSel('glassesPrice', headers.find(h => /glasses\s*price|reading\s*glasses\s*price|price/i.test(h)));
+      setSel('cmpPrice', guess('compare') || guess('msrp'));
+      setSel('qty', guess('qty') || guess('stock') || guess('inventory'));
+      setSel('grams', guess('gram') || guess('weight'));
+      setSel('opt1Val', guess('color') || guess('colour') || guess('frame color'));
+      setSel('opt2Val', guess('size'));
+      setSel('opt3Val', guess('material') || guess('frame_material') || guess('frame material'));
+      setSel('tags', guess('tag'));
+      setSel('barcode', guess('barcode') || guess('ean') || guess('upc'));
+      const imgCols = headers.filter(h=>/variant\s*image|image\s*url|^image$|image|img|photo|url/i.test(h));
+      ['image1','image2','image3'].forEach((id, i)=> setSel(id, imgCols[i]||''));
+
+      const setMF = (selEl, ...needles) => {
+        const hit = headers.find(h => {
+          const low = h.toLowerCase();
+          return needles.some(n => low.includes(n));
+        });
+        if (selEl && hit) selEl.value = hit;
+      };
+      setMF(map_frameWidthMM, 'frame width', 'width mm', 'front width');
+      setMF(map_noseBridge,   'bridge');
+      setMF(map_templeLength, 'temple');
+      setMF(map_lensHeight,   'lens height', 'height');
+      setMF(map_lensWidth,    'lens width', 'eye size');
+      setMF(map_clipOns,      'clip', 'clip-on', 'clip on');
+      setMF(map_springHinge,  'spring hinge', 'spring');
+
+      status('Auto‑inferred some columns. Please review.');
+    });
+
+    btnPreset.addEventListener('click', ()=>{
+      try {
+        const selects = document.querySelectorAll('#mapping select');
+        const setById = (id, val) => {
+          const idx = requiredMappings.findIndex(m => m.id === id);
+          if (idx < 0) return;
+          const sel = selects[idx];
+        if (!sel) return;
+          const opt = Array.from(sel.options).find(o => o.value === val);
+          if (opt) { sel.value = val; mappingState[id] = val; }
+        };
+        const pickHeader = (...c) => c.find(x => headers.includes(x));
+        const skuHeader = pickHeader('SKU','Sku'); if (skuHeader) setById('sku', skuHeader);
+        if (headers.includes('Spu')) setById('spu','Spu');
+        if (headers.includes('Frame Shape')) setById('frameShape','Frame Shape');
+        if (headers.includes('Gender')) setById('gender','Gender');
+        if (headers.includes('Feature')) setById('feature','Feature');
+        if (headers.includes('Weight')) setById('grams','Weight');
+        if (headers.includes('Frame Color')) setById('opt1Val','Frame Color');
+        if (headers.includes('Size')) setById('opt2Val','Size');
+        if (headers.includes('Frame_material')) setById('opt3Val','Frame_material');
+        if (headers.includes('Glasses Price')) setById('glassesPrice','Glasses Price');
+
+        const matchAndSet = (el, name)=> { if (headers.includes(name)) el.value = name; };
+        matchAndSet(map_frameWidthMM, 'Frame Width mm');
+        matchAndSet(map_noseBridge,   'Nose Bridge');
+        matchAndSet(map_templeLength, 'Temple Length');
+        matchAndSet(map_lensHeight,   'Lens Height');
+        matchAndSet(map_lensWidth,    'Lens Width');
+        matchAndSet(map_clipOns,      'Clip-ons');
+        matchAndSet(map_springHinge,  'Spring Hinge');
+
+        status('Preset applied for your workbook.');
+      } catch(e) { console.error(e); status('Could not apply preset: ' + (e.message||e)); }
+    });
+
+    // ---------- Try-On UI ----------
+    mfEnable?.addEventListener('change', ()=>{
+      the_mfBlock.style.display = mfEnable.checked ? 'grid' : 'none';
+      updateMfExample();
+    });
+    [mfBase, mfTpl, mfExt].forEach(x=> x?.addEventListener('input', updateMfExample));
+    function updateMfExample(){
+      const sku = 'F1234-1';
+      const tpl = (mfTpl?.value||'${sku}-tryon').replace(/\$\{sku\}/g, sku);
+      const url = (mfBase?.value||'https://cdn.example.com/overlays/') + tpl + (mfExt?.value||'.png');
+      if (mfExample) mfExample.textContent = url;
+    }
+
+    // ---------- Custom metafields UI ----------
+    function renderCmfList(){
+      cmfList.innerHTML = '';
+      customMetafields.forEach((mf, idx)=>{
+        const chip = document.createElement('div');
+        chip.className = 'chip';
+        chip.innerHTML = `<span>${mf.level} → Metafield: ${mf.ns}.${mf.key} [${mf.type}]</span>
+                          <button title="remove" aria-label="remove" data-idx="${idx}">✕</button>`;
+        chip.querySelector('button').addEventListener('click', (e)=>{
+          const i = Number(e.target.getAttribute('data-idx'));
+          customMetafields.splice(i,1);
+          renderCmfList();
+        });
+        cmfList.appendChild(chip);
+      });
+    }
+    btnAddCmf.addEventListener('click', ()=>{
+      const ns = cleanStr(cmfNs.value) || 'custom';
+      const key = cleanStr(cmfKey.value);
+      const type = cleanStr(cmfType.value) || 'single_line_text_field';
+      const level = cleanStr(cmfLevel.value) || 'variant';
+      const tpl = cleanStr(cmfTpl.value);
+      if (!key){ alert('Please provide a key for the metafield.'); return; }
+      customMetafields.push({ns,key,type,level,tpl});
+      cmfNs.value = ''; cmfKey.value = ''; cmfTpl.value = '';
+      renderCmfList();
+    });
+
+    // ---------- Build Shopify CSV ----------
+    btnBuild.addEventListener('click', ()=>{
+      if (!rows.length){ status(`<span class='warn'>No source rows loaded. Please load a CSV/XLSX and try again.</span>`); return; }
+      try {
+        const out = buildShopifyRows();
+        renderPreview(out.slice(0, 100));
+        enableDownload(out);
+        status(`<span class='success'>Built ${out.length.toLocaleString()} Shopify rows.</span>`);
+      } catch (e) {
+        console.error(e);
+        status(`<span class='err'>${e.message || e}</span>`);
+      }
+    });
+
+    function status(html){ statusEl.innerHTML = html; }
+
+    function getMappedOrDefaultNumber(mapSel, defEl, r){
+      const col = mapSel.value;
+      if (col && r[col] !== undefined && r[col] !== null && String(r[col]).trim() !== ''){
+        return toIntDigits(r[col]);
+      }
+      const def = defEl.value;
+      return def !== '' ? toIntDigits(def) : '';
+    }
+    function getMappedOrDefaultText(mapSel, defEl, r){
+      const col = mapSel.value;
+      if (col && r[col] !== undefined && r[col] !== null && String(r[col]).trim() !== ''){
+        return cleanStr(r[col]);
+      }
+      return cleanStr(defEl.value);
+    }
+
+    function buildShopifyRows(){
+      const m = {...mappingState};
+      const dv = cleanStr(defaultVendor.value) || 'Candye';
+      const dtSel = cleanStr(defaultTypeSel.value);
+      const skuPrefix = cleanStr(skuPrefixSel.value);
+
+      const chosenStatus = (productStatusSel.value === 'draft') ? 'draft' : 'active';
+      const markPublished = (chosenStatus === 'active') ? 'TRUE' : 'FALSE';
+      const prodCategory = productCategorySel.value || 'Eyeglasses';
+      const manualQty = Number(variantQtyEl.value);
+      const hasManualQty = Number.isFinite(manualQty) && manualQty > 0;
+      const markupPct = Number(priceAdjEl.value) || 0;
+      const extraTags = cleanStr(extraTagsEl.value);
+
+      if (!m.sku) throw new Error('Map at least Supplier SKU.');
+      if (!m.spu || !m.frameShape) throw new Error('For the Title/Handle rule, please map both “Spu” and “Frame Shape”.');
+      if (!m.glassesPrice) throw new Error('Please map “Glasses Price (source for Cost)”.');
+
+      const enriched = rows.map((r)=>{
+        const skuRaw = r[m.sku] ?? '';
+        const sku = cleanStr(skuRaw);
+        const baseSku = sku.split('-')[0] || '';
+        const finalSku = (skuPrefix ? `${skuPrefix}${sku}` : sku) || baseSku;
+
+        const frameShape = toProper(r[m.frameShape] ?? '');
+        const spu = cleanStr(r[m.spu] ?? '');
+        const titleFromRule = toProper(`Candye ${frameShape} Frame F${spu}`);
+        const handleFromRule = slugify(`Candye ${frameShape} Frame F${spu}`);
+
+        const opt1Name = cleanStr(r[m.opt1Name]) || 'Color';
+        const opt2Name = cleanStr(r[m.opt2Name]) || 'Size';
+        const opt3Name = cleanStr(r[m.opt3Name]) || 'Material';
+        const opt1Val  = toProper(cleanStr(r[m.opt1Val]));
+        const opt2Val  = toProper(cleanStr(r[m.opt2Val]));
+        const opt3Val  = toProper(cleanStr(r[m.opt3Val]));
+
+        const imgs = uniq([m.image1&&r[m.image1], m.image2&&r[m.image2], m.image3&&r[m.image3]]
+          .filter(Boolean).map(cleanStr)).filter(Boolean);
+
+        const vendorVal = cleanStr(r[m.vendor]) || dv;
+        const ptypeVal  = cleanStr(r[m.ptype]) || dtSel;
+
+        const gpRaw = r[m.glassesPrice];
+        let variantCost = extractPriceFromTierString(gpRaw);
+        if (variantCost === '') {
+          const extracted = threeFrom(gpRaw);
+          variantCost = extracted ? Number(extracted) : '';
+        }
+        const variantPrice = (variantCost !== '' && isFinite(markupPct))
+          ? Number((variantCost * (1 + markupPct / 100)).toFixed(2))
+          : variantCost;
+
+        const qtyVal = hasManualQty ? manualQty : toNum(r[m.qty]);
+
+        const genderVal = cleanStr(r[m.gender]);
+        const featureVal = cleanStr(r[m.feature]);
+        const mappedTags = cleanStr(r[m.tags]);
+        const combinedTags = normalizeTags(genderVal, featureVal, mappedTags, extraTags);
+
+        const mf_fixed = {
+          frameWidthMM: getMappedOrDefaultNumber(map_frameWidthMM, def_frameWidthMM, r),
+          noseBridge:   getMappedOrDefaultNumber(map_noseBridge,   def_noseBridge,   r),
+          templeLength: getMappedOrDefaultNumber(map_templeLength, def_templeLength, r),
+          lensHeight:   getMappedOrDefaultNumber(map_lensHeight,   def_lensHeight,   r),
+          lensWidth:    getMappedOrDefaultNumber(map_lensWidth,    def_lensWidth,    r),
+          clipOns:      getMappedOrDefaultText  (map_clipOns,      def_clipOns,      r),
+          springHinge:  getMappedOrDefaultText  (map_springHinge,  def_springHinge,  r),
+        };
+
+        return {
+          handle: handleFromRule,
+          title: titleFromRule,
+          bodyHtml: textToHtml(r[m.desc] ?? ''),
+          vendor: vendorVal,
+          productType: ptypeVal,
+          productCategory: prodCategory,
+          tags: combinedTags,
+          sku: finalSku,
+          price: variantPrice,
+          cost: variantCost,
+          compareAtPrice: toNum(r[m.cmpPrice]),
+          grams: toNum(r[m.grams]),
+          qty: qtyVal,
+          barcode: cleanStr(r[m.barcode] ?? ''),
+          opt1Name, opt1Val, opt2Name, opt2Val, opt3Name, opt3Val,
+          images: imgs,
+          spu, frameShape,
+          mf_fixed
+        };
+      });
+
+      const byHandle = new Map();
+      for (const row of enriched){
+        if (!byHandle.has(row.handle)) byHandle.set(row.handle, []);
+        byHandle.get(row.handle).push(row);
+      }
+
+      const baseHeader = [
+        'Handle','Title','Body (HTML)','Vendor','Product Category','Type','Tags','Published',
+        'Option1 Name','Option1 Value','Option2 Name','Option2 Value','Option3 Name','Option3 Value',
+        'Variant SKU','Variant Grams','Variant Inventory Tracker','Variant Inventory Qty','Variant Inventory Policy',
+        'Variant Fulfillment Service','Variant Price','Variant Compare At Price','Variant Requires Shipping','Variant Taxable','Variant Barcode',
+        'Image Src','Image Position','Gift Card','Status',
+        'Variant Cost'
+      ];
+
+      const fixedMFColumns = [
+        'Metafield: tryon.frame_width_mm [number_integer]',
+        'Metafield: custom.nose_bridge [number_integer]',
+        'Metafield: custom.temple_length [number_integer]',
+        'Metafield: custom.lens_height [number_integer]',
+        'Metafield: custom.lens_width [number_integer]',
+        'Metafield: custom.clip_ons [single_line_text_field]',
+        'Metafield: custom.spring_hinge [single_line_text_field]'
+      ];
+
+      const mfDefs = [...customMetafields.map(x=>({...x}))];
+      if (mfEnable?.checked){
+        const ns = cleanStr(mfNs.value) || 'custom';
+        const key = cleanStr(mfKey.value) || 'try_on_overlay_image';
+        const level = cleanStr(mfLevel.value) || 'variant';
+        const base = cleanStr(mfBase.value);
+        const tpl = (mfTpl.value || '${sku}-tryon');
+        const ext = (mfExt.value || '.png');
+        const fullTpl = (base ? base : '') + tpl + ext;
+        mfDefs.push({ ns, key, type: 'single_line_text_field', level, tpl: fullTpl });
+      }
+      const customMFColumns = mfDefs.map(d => `Metafield: ${d.ns}.${d.key} [${d.type}]`);
+
+      const CSV_HEADER = baseHeader.concat(fixedMFColumns).concat(customMFColumns);
+
+      const OUT = [];
+      const pushRow = (obj={})=>{
+        const row = CSV_HEADER.reduce((acc,h)=>{ acc[h] = obj[h] ?? ''; return acc; },{});
+        OUT.push(row);
+      };
+
+      for (const [handle, items] of byHandle.entries()){
+        items.sort(by('sku'));
+
+        const productTitle = items[0].title;
+        const productVendor = items[0].vendor;
+        const productType = items[0].productType;
+        const productCat = items[0].productCategory;
+        const productTags = items[0].tags;
+        const bodyHtml = items[0].bodyHtml;
+
+        const productImages = uniq(items.flatMap(x=>x.images));
+
+        items.forEach((v, idx)=>{
+          const row = {
+            'Handle': handle,
+            'Title': idx===0 ? productTitle : '',
+            'Body (HTML)': idx===0 ? bodyHtml : '',
+            'Vendor': idx===0 ? productVendor : '',
+            'Product Category': idx===0 ? productCat : '',
+            'Type': idx===0 ? productType : '',
+            'Tags': idx===0 ? productTags : '',
+            'Published': idx===0 ? (chosenStatus === 'active' ? 'TRUE' : 'FALSE') : '',
+
+            'Option1 Name': v.opt1Name || (v.opt1Val || v.opt2Val || v.opt3Val ? 'Color' : 'Title'),
+            'Option1 Value': (v.opt1Val || v.opt2Val || v.opt3Val) ? (v.opt1Val || '') : 'Default Title',
+            'Option2 Name': v.opt2Name || '',
+            'Option2 Value': v.opt2Val || '',
+            'Option3 Name': v.opt3Name || '',
+            'Option3 Value': v.opt3Val || '',
+
+            'Variant SKU': v.sku,
+            'Variant Grams': v.grams,
+            'Variant Inventory Tracker': 'shopify',
+            'Variant Inventory Qty': v.qty,
+            'Variant Inventory Policy': 'deny',
+            'Variant Fulfillment Service': 'manual',
+            'Variant Price': v.price,
+            'Variant Compare At Price': v.compareAtPrice,
+            'Variant Requires Shipping': 'TRUE',
+            'Variant Taxable': 'TRUE',
+            'Variant Barcode': v.barcode,
+
+            'Image Src': v.images[0] || '',
+            'Image Position': v.images[0] ? 1 : '',
+
+            'Gift Card': '',
+            'Status': chosenStatus,
+
+            'Variant Cost': v.cost
+          };
+
+          // ---- FIXED metafields (write on EVERY ROW; default numbers to 0) ----
+          const mf = v.mf_fixed || {};
+          row['Metafield: tryon.frame_width_mm [number_integer]'] = (mf.frameWidthMM !== '' ? mf.frameWidthMM : 0);
+          row['Metafield: custom.nose_bridge [number_integer]']   = (mf.noseBridge   !== '' ? mf.noseBridge   : 0);
+          row['Metafield: custom.temple_length [number_integer]'] = (mf.templeLength !== '' ? mf.templeLength : 0);
+          row['Metafield: custom.lens_height [number_integer]']   = (mf.lensHeight   !== '' ? mf.lensHeight   : 0);
+          row['Metafield: custom.lens_width [number_integer]']    = (mf.lensWidth    !== '' ? mf.lensWidth    : 0);
+          row['Metafield: custom.clip_ons [single_line_text_field]']     = mf.clipOns || '';
+          row['Metafield: custom.spring_hinge [single_line_text_field]'] = mf.springHinge || '';
+
+          // ---- CUSTOM metafields (builder) with level handling ----
+          const scope = {
+            sku: v.sku, handle,
+            spu: v.spu, frameShape: v.frameShape,
+            opt1Val: v.opt1Val, opt2Val: v.opt2Val, opt3Val: v.opt3Val,
+            title: productTitle, vendor: productVendor,
+            productType, productCategory: productCat,
+            price: v.price, cost: v.cost, tags: productTags
+          };
+
+          mfDefs.forEach((d, i)=>{
+            const col = customMFColumns[i];
+            const value = applyTemplate(d.tpl, scope);
+            if (d.level === 'variant') {
+              row[col] = value;
+            } else if (d.level === 'product' && idx === 0) {
+              row[col] = value;
+            }
+          });
+
+          pushRow(row);
+        });
+
+        // extra image-only rows
+        productImages.slice(1).forEach((img, i)=>{
+          const row = {
+            'Handle': handle,
+            'Image Src': img,
+            'Image Position': i+2
+          };
+          pushRow(row);
+        });
+      }
+
+      return OUT.map(r=>r);
+    }
+
+    function renderPreview(objs){
+      previewWrap.innerHTML = '';
+      previewTip.style.display = 'none';
+      if (!objs.length){ previewWrap.textContent = 'No rows to preview.'; return; }
+
+      const headers = Object.keys(objs[0]);
+      const table = document.createElement('table');
+      const thead = document.createElement('thead');
+      const thr = document.createElement('tr');
+      headers.forEach(h=>{ const th = document.createElement('th'); th.textContent = h; thr.append(th); });
+      thead.append(thr);
+      table.append(thead);
+
+      const tbody = document.createElement('tbody');
+      objs.forEach(o=>{
+        const tr = document.createElement('tr');
+        headers.forEach(h=>{
+          const td = document.createElement('td');
+          td.textContent = (o[h] ?? '');
+          tr.append(td);
+        });
+        tbody.append(tr);
+      });
+      table.append(tbody);
+      previewWrap.append(table);
+    }
+
+    function enableDownload(objs){
+      const cols = Object.keys(objs[0]);
+      const csv = Papa.unparse({ fields: cols, data: objs.map(o=>cols.map(c=>o[c])) });
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      btnDownload.disabled = false;
+      btnDownload.onclick = ()=>{
+        const a = document.createElement('a');
+        a.href = url; a.download = `shopify_import_${Date.now()}.csv`;
+        document.body.appendChild(a); a.click(); a.remove();
+      };
+    }
+
+    btnReset.addEventListener('click', ()=>{ location.reload(); });
+  </script>
+</body>
+</html>
