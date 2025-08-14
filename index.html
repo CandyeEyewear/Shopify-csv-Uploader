@@ -60,7 +60,8 @@
       <div class="muted">Supplier → Processed → Shopify, all in your browser</div>
     </div>
     <div class="row" style="gap:8px">
-      <a class="btn link" href="https://580caedc5675.ngrok-free.app" target="_blank" rel="noopener noreferrer">Add Images</a>
+      <a class="btn link" href="https://580caedc5675.ngrok-free.app" target="_blank" rel="noopener noreferrer">Add Image (Online)</a>
+      <a class="btn link" href="http://localhost:3000" target="_blank" rel="noopener noreferrer">Add Images (Local)</a>
       <button id="btnDownload" class="btn primary" disabled>Download Shopify CSV</button>
       <button id="btnReset" class="btn">Reset</button>
     </div>
@@ -221,20 +222,44 @@
             <label class="muted" style="margin-top:6px">Default</label>
             <input type="number" id="def_lensWidth" min="0" step="1" />
           </div>
+
+          <!-- clip-ons (BOOLEAN) -->
           <div>
             <label>Clip‑ons (map column)</label>
             <select id="map_clipOns"></select>
             <label class="muted" style="margin-top:6px">Default</label>
-            <input type="text" id="def_clipOns" placeholder="Yes / No / Included" />
+            <select id="def_clipOns">
+              <option value="">— none —</option>
+              <option value="true">Yes</option>
+              <option value="false">No</option>
+            </select>
           </div>
+
+          <!-- spring hinge (BOOLEAN) -->
           <div>
             <label>Spring Hinge (map column)</label>
             <select id="map_springHinge"></select>
             <label class="muted" style="margin-top:6px">Default</label>
-            <input type="text" id="def_springHinge" placeholder="Yes / No" />
+            <select id="def_springHinge">
+              <option value="">— none —</option>
+              <option value="true">Yes</option>
+              <option value="false">No</option>
+            </select>
+          </div>
+
+          <!-- NEW: nose pad (BOOLEAN) -->
+          <div>
+            <label>Nose Pad (map column)</label>
+            <select id="map_nosePad"></select>
+            <label class="muted" style="margin-top:6px">Default</label>
+            <select id="def_nosePad">
+              <option value="">— none —</option>
+              <option value="true">Yes</option>
+              <option value="false">No</option>
+            </select>
           </div>
         </div>
-        <div class="muted" style="margin-top:8px">These will populate Shopify metafields on each <b>product</b> (first row per product).</div>
+        <div class="muted" style="margin-top:8px">These populate Shopify metafields on every row (Shopify merges per product).</div>
       </div>
 
       <!-- Custom Metafields (builder) -->
@@ -353,6 +378,7 @@
       .replace(/\s+/g,' ')
       .trim();
 
+    // Normalize tags: replace semicolons->commas, split, trim, de-dupe, join
     function normalizeTags(...parts){
       const tokens = [];
       parts.filter(Boolean).forEach(p=>{
@@ -366,6 +392,7 @@
       return unique.join(', ');
     }
 
+    // Template replacement for metafield values
     function applyTemplate(tpl, scope){
       const s = String(tpl||'');
       return s.replace(/\$\{(\w+)\}/g, (_,k)=> {
@@ -374,11 +401,23 @@
       });
     }
 
+    // Boolean normalization for mapping/defaults → "true"/"false"
+    function normalizeBoolean(val, fallback = 'false'){
+      const s = String(val ?? '').trim().toLowerCase();
+      if (!s) return fallback;
+      if (['true','yes','y','1','on'].includes(s)) return 'true';
+      if (['false','no','n','0','off'].includes(s)) return 'false';
+      // strings like "With Clip-ons", "Included" → treat as true
+      if (/^(with|include|included|has)/.test(s)) return 'true';
+      return fallback;
+    }
+
     // ---------- State ----------
     let headers = [];
     let rows = [];
     let customMetafields = []; // {ns,key,type,level,tpl}
 
+    // Core mapping list
     const requiredMappings = [
       { id:'sku',           label:'Supplier SKU' },
       { id:'spu',           label:'Spu' },
@@ -405,14 +444,15 @@
       { id:'tags',          label:'Tags (extra, from source — optional)' },
       { id:'barcode',       label:'Barcode (optional)' },
 
-      // Fixed metafield mappings (product-level)
+      // Fixed metafield mappings (we output per row; Shopify merges)
       { id:'frameWidthMM',  label:'(MF) Frame Width mm' },
       { id:'noseBridge',    label:'(MF) Nose Bridge' },
       { id:'templeLength',  label:'(MF) Temple Length' },
       { id:'lensHeight',    label:'(MF) Lens Height' },
       { id:'lensWidth',     label:'(MF) Lens Width' },
-      { id:'clipOns',       label:'(MF) Clip-ons (text)' },
-      { id:'springHinge',   label:'(MF) Spring Hinge (text)' }
+      { id:'clipOns',       label:'(MF) Clip-ons (boolean)' },
+      { id:'springHinge',   label:'(MF) Spring Hinge (boolean)' },
+      { id:'nosePad',       label:'(MF) Nose Pad (boolean)' }
     ];
 
     const mappingState = {};
@@ -458,16 +498,21 @@
     const map_templeLength = el('map_templeLength');
     const map_lensHeight   = el('map_lensHeight');
     const map_lensWidth    = el('map_lensWidth');
+
     const map_clipOns      = el('map_clipOns');
+    const def_clipOns      = el('def_clipOns');
+
     const map_springHinge  = el('map_springHinge');
+    const def_springHinge  = el('def_springHinge');
+
+    const map_nosePad      = el('map_nosePad');
+    const def_nosePad      = el('def_nosePad');
 
     const def_frameWidthMM = el('def_frameWidthMM');
     const def_noseBridge   = el('def_noseBridge');
     const def_templeLength = el('def_templeLength');
     const def_lensHeight   = el('def_lensHeight');
     const def_lensWidth    = el('def_lensWidth');
-    const def_clipOns      = el('def_clipOns');
-    const def_springHinge  = el('def_springHinge');
 
     // Custom metafields UI
     const cmfNs = el('cmfNs');
@@ -556,6 +601,7 @@
     // ---------- Mapping UI ----------
     function buildMappingUI(){
       mappingWrap.innerHTML = '';
+      // Core required mappings
       requiredMappings.forEach(m => {
         const wrap = document.createElement('div');
         const lab = document.createElement('label');
@@ -567,7 +613,8 @@
         mappingWrap.append(wrap);
       });
 
-      const mfSelects = [map_frameWidthMM, map_noseBridge, map_templeLength, map_lensHeight, map_lensWidth, map_clipOns, map_springHinge];
+      // Populate fixed MF mapping dropdowns
+      const mfSelects = [map_frameWidthMM, map_noseBridge, map_templeLength, map_lensHeight, map_lensWidth, map_clipOns, map_springHinge, map_nosePad];
       mfSelects.forEach(sel => {
         sel.innerHTML = `<option value="">— none —</option>` + headers.map(h=>`<option value="${h}">${h}</option>`).join('');
       });
@@ -604,6 +651,7 @@
       const imgCols = headers.filter(h=>/variant\s*image|image\s*url|^image$|image|img|photo|url/i.test(h));
       ['image1','image2','image3'].forEach((id, i)=> setSel(id, imgCols[i]||''));
 
+      // Infer fixed MF columns
       const setMF = (selEl, ...needles) => {
         const hit = headers.find(h => {
           const low = h.toLowerCase();
@@ -618,6 +666,7 @@
       setMF(map_lensWidth,    'lens width', 'eye size');
       setMF(map_clipOns,      'clip', 'clip-on', 'clip on');
       setMF(map_springHinge,  'spring hinge', 'spring');
+      setMF(map_nosePad,      'nose pad', 'nosepad', 'pads');
 
       status('Auto‑inferred some columns. Please review.');
     });
@@ -629,7 +678,7 @@
           const idx = requiredMappings.findIndex(m => m.id === id);
           if (idx < 0) return;
           const sel = selects[idx];
-        if (!sel) return;
+          if (!sel) return;
           const opt = Array.from(sel.options).find(o => o.value === val);
           if (opt) { sel.value = val; mappingState[id] = val; }
         };
@@ -645,6 +694,7 @@
         if (headers.includes('Frame_material')) setById('opt3Val','Frame_material');
         if (headers.includes('Glasses Price')) setById('glassesPrice','Glasses Price');
 
+        // Fixed MF preset (only if matching header names exist)
         const matchAndSet = (el, name)=> { if (headers.includes(name)) el.value = name; };
         matchAndSet(map_frameWidthMM, 'Frame Width mm');
         matchAndSet(map_noseBridge,   'Nose Bridge');
@@ -653,6 +703,7 @@
         matchAndSet(map_lensWidth,    'Lens Width');
         matchAndSet(map_clipOns,      'Clip-ons');
         matchAndSet(map_springHinge,  'Spring Hinge');
+        matchAndSet(map_nosePad,      'Nose Pad');
 
         status('Preset applied for your workbook.');
       } catch(e) { console.error(e); status('Could not apply preset: ' + (e.message||e)); }
@@ -730,6 +781,14 @@
       }
       return cleanStr(defEl.value);
     }
+    function getMappedOrDefaultBoolean(mapSel, defSel, r){
+      const col = mapSel.value;
+      if (col && r[col] !== undefined && r[col] !== null && String(r[col]).trim() !== ''){
+        return normalizeBoolean(r[col], defSel.value || 'false');
+      }
+      // if default not chosen, fall back to 'false' for Shopify boolean
+      return normalizeBoolean(defSel.value || 'false', 'false');
+    }
 
     function buildShopifyRows(){
       const m = {...mappingState};
@@ -738,7 +797,6 @@
       const skuPrefix = cleanStr(skuPrefixSel.value);
 
       const chosenStatus = (productStatusSel.value === 'draft') ? 'draft' : 'active';
-      const markPublished = (chosenStatus === 'active') ? 'TRUE' : 'FALSE';
       const prodCategory = productCategorySel.value || 'Eyeglasses';
       const manualQty = Number(variantQtyEl.value);
       const hasManualQty = Number.isFinite(manualQty) && manualQty > 0;
@@ -755,11 +813,13 @@
         const baseSku = sku.split('-')[0] || '';
         const finalSku = (skuPrefix ? `${skuPrefix}${sku}` : sku) || baseSku;
 
+        // Title + Handle
         const frameShape = toProper(r[m.frameShape] ?? '');
         const spu = cleanStr(r[m.spu] ?? '');
         const titleFromRule = toProper(`Candye ${frameShape} Frame F${spu}`);
         const handleFromRule = slugify(`Candye ${frameShape} Frame F${spu}`);
 
+        // Options
         const opt1Name = cleanStr(r[m.opt1Name]) || 'Color';
         const opt2Name = cleanStr(r[m.opt2Name]) || 'Size';
         const opt3Name = cleanStr(r[m.opt3Name]) || 'Material';
@@ -773,6 +833,7 @@
         const vendorVal = cleanStr(r[m.vendor]) || dv;
         const ptypeVal  = cleanStr(r[m.ptype]) || dtSel;
 
+        // COST from tiered string or fallback rule
         const gpRaw = r[m.glassesPrice];
         let variantCost = extractPriceFromTierString(gpRaw);
         if (variantCost === '') {
@@ -785,19 +846,23 @@
 
         const qtyVal = hasManualQty ? manualQty : toNum(r[m.qty]);
 
+        // Tags
         const genderVal = cleanStr(r[m.gender]);
         const featureVal = cleanStr(r[m.feature]);
         const mappedTags = cleanStr(r[m.tags]);
         const combinedTags = normalizeTags(genderVal, featureVal, mappedTags, extraTags);
 
+        // Fixed metafields
         const mf_fixed = {
           frameWidthMM: getMappedOrDefaultNumber(map_frameWidthMM, def_frameWidthMM, r),
           noseBridge:   getMappedOrDefaultNumber(map_noseBridge,   def_noseBridge,   r),
           templeLength: getMappedOrDefaultNumber(map_templeLength, def_templeLength, r),
           lensHeight:   getMappedOrDefaultNumber(map_lensHeight,   def_lensHeight,   r),
           lensWidth:    getMappedOrDefaultNumber(map_lensWidth,    def_lensWidth,    r),
-          clipOns:      getMappedOrDefaultText  (map_clipOns,      def_clipOns,      r),
-          springHinge:  getMappedOrDefaultText  (map_springHinge,  def_springHinge,  r),
+
+          clipOns:      getMappedOrDefaultBoolean(map_clipOns,     def_clipOns,      r), // true/false
+          springHinge:  getMappedOrDefaultBoolean(map_springHinge, def_springHinge,  r), // true/false
+          nosePad:      getMappedOrDefaultBoolean(map_nosePad,     def_nosePad,      r)  // true/false
         };
 
         return {
@@ -822,12 +887,14 @@
         };
       });
 
+      // Group by handle
       const byHandle = new Map();
       for (const row of enriched){
         if (!byHandle.has(row.handle)) byHandle.set(row.handle, []);
         byHandle.get(row.handle).push(row);
       }
 
+      // ---------- Build header ----------
       const baseHeader = [
         'Handle','Title','Body (HTML)','Vendor','Product Category','Type','Tags','Published',
         'Option1 Name','Option1 Value','Option2 Name','Option2 Value','Option3 Name','Option3 Value',
@@ -837,16 +904,19 @@
         'Variant Cost'
       ];
 
+      // Fixed required metafield columns (BOOLEAN updates included)
       const fixedMFColumns = [
         'Metafield: tryon.frame_width_mm [number_integer]',
         'Metafield: custom.nose_bridge [number_integer]',
         'Metafield: custom.temple_length [number_integer]',
         'Metafield: custom.lens_height [number_integer]',
         'Metafield: custom.lens_width [number_integer]',
-        'Metafield: custom.clip_ons [single_line_text_field]',
-        'Metafield: custom.spring_hinge [single_line_text_field]'
+        'Metafield: custom.clip_ons [boolean]',
+        'Metafield: custom.spring_hinge [boolean]',
+        'Metafield: custom.nose_pad [boolean]'
       ];
 
+      // Custom metafields (builder) and try-on overlay (optional)
       const mfDefs = [...customMetafields.map(x=>({...x}))];
       if (mfEnable?.checked){
         const ns = cleanStr(mfNs.value) || 'custom';
@@ -889,9 +959,9 @@
             'Product Category': idx===0 ? productCat : '',
             'Type': idx===0 ? productType : '',
             'Tags': idx===0 ? productTags : '',
-            'Published': idx===0 ? (chosenStatus === 'active' ? 'TRUE' : 'FALSE') : '',
+            'Published': idx===0 ? (productStatusSel.value === 'active' ? 'TRUE' : 'FALSE') : '',
 
-            'Option1 Name': v.opt1Name || (v.opt1Val || v.opt2Val || v.opt3Val ? 'Color' : 'Title'),
+            'Option1 Name': v.opt1Name || ((v.opt1Val || v.opt2Val || v.opt3Val) ? 'Color' : 'Title'),
             'Option1 Value': (v.opt1Val || v.opt2Val || v.opt3Val) ? (v.opt1Val || '') : 'Default Title',
             'Option2 Name': v.opt2Name || '',
             'Option2 Value': v.opt2Val || '',
@@ -914,20 +984,20 @@
             'Image Position': v.images[0] ? 1 : '',
 
             'Gift Card': '',
-            'Status': chosenStatus,
-
+            'Status': productStatusSel.value,
             'Variant Cost': v.cost
           };
 
-          // ---- FIXED metafields (write on EVERY ROW; default numbers to 0) ----
+          // ---- FIXED metafields (write on EVERY ROW) ----
           const mf = v.mf_fixed || {};
           row['Metafield: tryon.frame_width_mm [number_integer]'] = (mf.frameWidthMM !== '' ? mf.frameWidthMM : 0);
           row['Metafield: custom.nose_bridge [number_integer]']   = (mf.noseBridge   !== '' ? mf.noseBridge   : 0);
           row['Metafield: custom.temple_length [number_integer]'] = (mf.templeLength !== '' ? mf.templeLength : 0);
           row['Metafield: custom.lens_height [number_integer]']   = (mf.lensHeight   !== '' ? mf.lensHeight   : 0);
           row['Metafield: custom.lens_width [number_integer]']    = (mf.lensWidth    !== '' ? mf.lensWidth    : 0);
-          row['Metafield: custom.clip_ons [single_line_text_field]']     = mf.clipOns || '';
-          row['Metafield: custom.spring_hinge [single_line_text_field]'] = mf.springHinge || '';
+          row['Metafield: custom.clip_ons [boolean]']             = normalizeBoolean(mf.clipOns, 'false');
+          row['Metafield: custom.spring_hinge [boolean]']         = normalizeBoolean(mf.springHinge, 'false');
+          row['Metafield: custom.nose_pad [boolean]']             = normalizeBoolean(mf.nosePad, 'false');
 
           // ---- CUSTOM metafields (builder) with level handling ----
           const scope = {
