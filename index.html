@@ -1,4 +1,4 @@
-<!doctype html>
+<!doctype html> 
 <html lang="en">
 <head>
   <meta charset="utf-8" />
@@ -63,6 +63,7 @@
       <a class="btn link" href="https://580caedc5675.ngrok-free.app" target="_blank" rel="noopener noreferrer">Add Image (Online)</a>
       <a class="btn link" href="http://localhost:3000" target="_blank" rel="noopener noreferrer">Add Images (Local)</a>
       <button id="btnDownload" class="btn primary" disabled>Download Shopify CSV</button>
+      <button id="btnDownloadInventory" class="btn primary" disabled>Download Inventory CSV</button>
       <button id="btnReset" class="btn">Reset</button>
     </div>
   </header>
@@ -304,8 +305,9 @@
         <div id="cmfList" class="list" style="margin-top:10px"></div>
       </div>
 
-      <div style="margin-top:16px">
+      <div style="margin-top:16px; display:flex; gap:8px; flex-wrap:wrap">
         <button id="btnBuild" class="btn accent" disabled>Build Shopify CSV</button>
+        <button id="btnBuildInventory" class="btn accent" disabled>Build Shopify Inventory CSV</button>
       </div>
     </section>
 
@@ -468,6 +470,8 @@
     const btnPreset = el('btnPreset');
     const btnBuild = el('btnBuild');
     const btnDownload = el('btnDownload');
+    const btnDownloadInventory = el('btnDownloadInventory'); // NEW
+    const btnBuildInventory = el('btnBuildInventory'); // NEW
     const btnReset = el('btnReset');
     const previewWrap = el('previewWrap');
     const previewTip = el('previewTip');
@@ -555,6 +559,7 @@
           rows = data;
           buildMappingUI();
           btnBuild.disabled = rows.length === 0;
+          btnBuildInventory.disabled = rows.length === 0; // NEW
           btnPreset.disabled = false;
           status(rows.length ? `Parsed ${rows.length.toLocaleString()} rows from CSV.` : `<span class='warn'>Header detected but no data rows found.</span>`);
         },
@@ -588,6 +593,7 @@
           rows = (json || []).filter(row => Object.values(row).some(v => String(v ?? '').trim() !== ''));
           buildMappingUI();
           btnBuild.disabled = rows.length === 0;
+          btnBuildInventory.disabled = rows.length === 0; // NEW
           btnPreset.disabled = false;
           status(rows.length ? `Parsed ${rows.length.toLocaleString()} rows from “${chosenName}”.` : `<span class='warn'>Sheet “${chosenName}” has headers but no data rows.</span>`);
         } catch(err){
@@ -803,11 +809,12 @@
       const markupPct = Number(priceAdjEl.value) || 0;
       const extraTags = cleanStr(extraTagsEl.value);
 
-      if (!m.sku) throw new Error('Map at least Supplier SKU.');
-      if (!m.spu || !m.frameShape) throw new Error('For the Title/Handle rule, please map both “Spu” and “Frame Shape”.');
-      if (!m.glassesPrice) throw new Error('Please map “Glasses Price (source for Cost)”.');
-
       const enriched = rows.map((r)=>{
+        const m = {...mappingState};
+        if (!m.sku) throw new Error('Map at least Supplier SKU.');
+        if (!m.spu || !m.frameShape) throw new Error('For the Title/Handle rule, please map both “Spu” and “Frame Shape”.');
+        if (!m.glassesPrice) throw new Error('Please map “Glasses Price (source for Cost)”.');
+
         const skuRaw = r[m.sku] ?? '';
         const sku = cleanStr(skuRaw);
         const baseSku = sku.split('-')[0] || '';
@@ -1075,6 +1082,76 @@
         document.body.appendChild(a); a.click(); a.remove();
       };
     }
+
+    // ---------- Build Shopify Inventory CSV (NEW) ----------
+    btnBuildInventory.addEventListener('click', ()=>{
+      if (!rows.length){
+        status(`<span class='warn'>No source rows loaded. Please load a CSV/XLSX and try again.</span>`);
+        return;
+      }
+      try {
+        const out = buildShopifyInventoryRows();
+        renderPreview(out.slice(0, 100)); // show preview like the main build
+        enableInventoryDownload(out);     // enable top download button
+        status(`<span class='success'>Built ${out.length.toLocaleString()} inventory rows.</span>`);
+      } catch (e){
+        console.error(e);
+        status(`<span class='err'>${e.message || e}</span>`);
+      }
+    });
+
+    function buildShopifyInventoryRows(){
+      const m = {...mappingState};
+      const skuPrefix = cleanStr(skuPrefixSel.value);
+      const locationName = 'WOHU'; // Default inventory location as requested
+
+      if (!m.sku) throw new Error('Map at least Supplier SKU.');
+      if (!m.spu || !m.frameShape) throw new Error('For inventory handles, please map both “Spu” and “Frame Shape”.');
+
+      const items = rows.map(r=>{
+        const skuRaw = r[m.sku] ?? '';
+        const sku = cleanStr(skuRaw);
+        const baseSku = sku.split('-')[0] || '';
+        const finalSku = (skuPrefix ? `${skuPrefix}${sku}` : sku) || baseSku;
+
+        const frameShape = toProper(r[m.frameShape] ?? '');
+        const spu = cleanStr(r[m.spu] ?? '');
+        const handle = slugify(`Candye ${frameShape} Frame F${spu}`);
+
+        const manualQty = Number(variantQtyEl.value);
+        const hasManualQty = Number.isFinite(manualQty) && manualQty > 0;
+        const qtyVal = hasManualQty ? manualQty : toNum(r[m.qty]);
+
+        return { handle, sku: finalSku, available: qtyVal };
+      });
+
+      const filtered = items.filter(it => it.sku);
+
+      const INVENTORY_HEADER = ['Handle','Variant SKU','Location','Available'];
+      const out = filtered.map(it => ({
+        'Handle': it.handle,
+        'Variant SKU': it.sku,
+        'Location': locationName,
+        'Available': (it.available === '' || it.available === null || isNaN(Number(it.available))) ? 0 : Number(it.available)
+      }));
+
+      // Ensure we always have at least headers if something went odd
+      return out.length ? out : [INVENTORY_HEADER.reduce((o, h)=> (o[h]='', o), {})];
+    }
+
+    function enableInventoryDownload(objs){
+      const cols = Object.keys(objs[0]);
+      const csv = Papa.unparse({ fields: cols, data: objs.map(o=>cols.map(c=>o[c])) });
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      btnDownloadInventory.disabled = false;
+      btnDownloadInventory.onclick = ()=>{
+        const a = document.createElement('a');
+        a.href = url; a.download = `shopify_inventory_${Date.now()}.csv`;
+        document.body.appendChild(a); a.click(); a.remove();
+      };
+    }
+    // ---------- End Inventory CSV (NEW) ----------
 
     btnReset.addEventListener('click', ()=>{ location.reload(); });
   </script>
