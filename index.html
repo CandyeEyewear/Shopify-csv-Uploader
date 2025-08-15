@@ -83,12 +83,12 @@
       <hr style="border:0;border-top:1px solid rgba(148,163,184,.15); margin: 18px 0" />
 
       <h2>2) Map supplier columns</h2>
-      <p class="muted">Pick which columns in your supplier file correspond to key product fields. You can leave non‑applicable ones blank.</p>
+      <p class="muted">Pick which columns in your supplier file correspond to key product fields. You can leave non-applicable ones blank.</p>
 
       <div id="mapping" class="grid cols-2"></div>
 
       <div style="margin-top:10px; display:flex; gap:8px; flex-wrap:wrap">
-        <button id="btnInfer" class="btn">Auto‑infer common columns</button>
+        <button id="btnInfer" class="btn">Auto-infer common columns</button>
         <button id="btnPreset" class="btn" disabled>Preset: Master List (this workbook)</button>
       </div>
 
@@ -145,16 +145,16 @@
         </div>
 
         <div>
-          <label>Additional Tags (comma‑separated)</label>
+          <label>Additional Tags (comma-separated)</label>
           <input type="text" id="extraTags" placeholder="e.g., Polarized, Spring Hinge" />
-          <div class="muted">Appends to tags built from Gender + Feature (semicolons are auto‑converted).</div>
+          <div class="muted">Appends to tags built from Gender + Feature (semicolons are auto-converted).</div>
         </div>
       </div>
 
       <!-- Try-On (kept) -->
       <div class="card" style="margin-top:16px; background:#0b1220">
         <div class="row" style="justify-content:space-between; align-items:center">
-          <h3 style="margin:0">Try‑On Overlay Metafield (optional)</h3>
+          <h3 style="margin:0">Try-On Overlay Metafield (optional)</h3>
           <label class="switch"><input type="checkbox" id="mfEnable" /> Enable</label>
         </div>
         <div id="mfBlock" class="grid cols-3" style="margin-top:10px; display:none">
@@ -226,7 +226,7 @@
 
           <!-- clip-ons (BOOLEAN) -->
           <div>
-            <label>Clip‑ons (map column)</label>
+            <label>Clip-ons (map column)</label>
             <select id="map_clipOns"></select>
             <label class="muted" style="margin-top:6px">Default</label>
             <select id="def_clipOns">
@@ -412,6 +412,15 @@
       // strings like "With Clip-ons", "Included" → treat as true
       if (/^(with|include|included|has)/.test(s)) return 'true';
       return fallback;
+    }
+
+    // Date string for filenames (YYYY-MM-DD)
+    function todayString(){
+      const d = new Date();
+      const y = d.getFullYear();
+      const m = String(d.getMonth()+1).padStart(2,'0');
+      const da = String(d.getDate()).padStart(2,'0');
+      return `${y}-${m}-${da}`;
     }
 
     // ---------- State ----------
@@ -674,7 +683,7 @@
       setMF(map_springHinge,  'spring hinge', 'spring');
       setMF(map_nosePad,      'nose pad', 'nosepad', 'pads');
 
-      status('Auto‑inferred some columns. Please review.');
+      status('Auto-inferred some columns. Please review.');
     });
 
     btnPreset.addEventListener('click', ()=>{
@@ -1078,12 +1087,12 @@
       btnDownload.disabled = false;
       btnDownload.onclick = ()=>{
         const a = document.createElement('a');
-        a.href = url; a.download = `shopify_import_${Date.now()}.csv`;
+        a.href = url; a.download = `shopify_import_${todayString()}.csv`;
         document.body.appendChild(a); a.click(); a.remove();
       };
     }
 
-    // ---------- Build Shopify Inventory CSV (NEW) ----------
+    // ---------- Build Shopify Inventory CSV (UPDATED) ----------
     btnBuildInventory.addEventListener('click', ()=>{
       if (!rows.length){
         status(`<span class='warn'>No source rows loaded. Please load a CSV/XLSX and try again.</span>`);
@@ -1117,22 +1126,81 @@
         const frameShape = toProper(r[m.frameShape] ?? '');
         const spu = cleanStr(r[m.spu] ?? '');
         const handle = slugify(`Candye ${frameShape} Frame F${spu}`);
+        const title = toProper(`Candye ${frameShape} Frame F${spu}`);
+
+        // Option values
+        let opt1Val = toProper(cleanStr(r[m.opt1Val]));
+        let opt2Val = toProper(cleanStr(r[m.opt2Val]));
+        let opt3Val = toProper(cleanStr(r[m.opt3Val]));
+        const anyOptions = !!(opt1Val || opt2Val || opt3Val);
+
+        const opt1Name = cleanStr(r[m.opt1Name]) || (anyOptions ? 'Color' : 'Title');
+        const opt2Name = cleanStr(r[m.opt2Name]) || (opt2Val ? 'Size' : '');
+        const opt3Name = cleanStr(r[m.opt3Name]) || (opt3Val ? 'Material' : '');
+
+        if (!anyOptions){
+          opt1Val = 'Default Title';
+          opt2Val = '';
+          opt3Val = '';
+        }
 
         const manualQty = Number(variantQtyEl.value);
         const hasManualQty = Number.isFinite(manualQty) && manualQty > 0;
         const qtyVal = hasManualQty ? manualQty : toNum(r[m.qty]);
 
-        return { handle, sku: finalSku, available: qtyVal };
+        const available = (qtyVal === '' || qtyVal === null || isNaN(Number(qtyVal))) ? 0 : Number(qtyVal);
+        const committed = 0;
+        const unavailable = 0;
+        const incoming = 0;
+        const onHand = available + committed + unavailable;
+
+        return {
+          handle, title,
+          opt1Name, opt1Val,
+          opt2Name, opt2Val,
+          opt3Name, opt3Val,
+          sku: finalSku,
+          hsCode: '',
+          coo: '',
+          location: locationName,
+          incoming,
+          unavailable,
+          committed,
+          available,
+          onHand
+        };
       });
 
       const filtered = items.filter(it => it.sku);
 
-      const INVENTORY_HEADER = ['Handle','Variant SKU','Location','Available'];
+      // Header required by Shopify error message
+      const INVENTORY_HEADER = [
+        'Handle','Title',
+        'Option1 Name','Option1 Value',
+        'Option2 Name','Option2 Value',
+        'Option3 Name','Option3 Value',
+        'SKU','HS Code','COO','Location',
+        'Incoming','Unavailable','Committed','Available','On hand'
+      ];
+
       const out = filtered.map(it => ({
         'Handle': it.handle,
-        'Variant SKU': it.sku,
-        'Location': locationName,
-        'Available': (it.available === '' || it.available === null || isNaN(Number(it.available))) ? 0 : Number(it.available)
+        'Title': it.title,
+        'Option1 Name': it.opt1Name,
+        'Option1 Value': it.opt1Val,
+        'Option2 Name': it.opt2Name,
+        'Option2 Value': it.opt2Val,
+        'Option3 Name': it.opt3Name,
+        'Option3 Value': it.opt3Val,
+        'SKU': it.sku,
+        'HS Code': it.hsCode,
+        'COO': it.coo,
+        'Location': it.location,
+        'Incoming': it.incoming,
+        'Unavailable': it.unavailable,
+        'Committed': it.committed,
+        'Available': it.available,
+        'On hand': it.onHand
       }));
 
       // Ensure we always have at least headers if something went odd
@@ -1147,15 +1215,13 @@
       btnDownloadInventory.disabled = false;
       btnDownloadInventory.onclick = ()=>{
         const a = document.createElement('a');
-        a.href = url; a.download = `shopify_inventory_${Date.now()}.csv`;
+        a.href = url; a.download = `shopify_inventory_${todayString()}.csv`;
         document.body.appendChild(a); a.click(); a.remove();
       };
     }
-    // ---------- End Inventory CSV (NEW) ----------
+    // ---------- End Inventory CSV (UPDATED) ----------
 
     btnReset.addEventListener('click', ()=>{ location.reload(); });
   </script>
 </body>
 </html>
-
-
